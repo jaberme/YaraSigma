@@ -96,12 +96,119 @@ reales. Se compila con:
 latexmk -pdf practica_yara_sigma.tex
 ```
 
-## Requisitos
+## Descarga e instalación
+
+Para reproducir la práctica necesitas **YARA** (línea de comandos), **Sigma**
+(a través de `sigma-cli`, que requiere Python 3.8 o superior) y, para las demos,
+`gcc` y `sqlite3`. A continuación tienes las instrucciones para Linux y Windows.
+
+### YARA
+
+**Linux (paquete de la distribución)**
+
+```sh
+# Debian / Ubuntu
+sudo apt update && sudo apt install yara
+
+# Fedora
+sudo dnf install yara
+
+# Arch
+sudo pacman -S yara
+```
+
+**Linux (compilar la última versión desde el código fuente)**
+
+```sh
+# Dependencias de compilación (Debian/Ubuntu)
+sudo apt install automake libtool make gcc pkg-config flex bison \
+                 libssl-dev libjansson-dev libmagic-dev
+
+# Descargar y compilar (sustituye la versión por la última de las releases)
+wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.5.8.tar.gz
+tar xzf v4.5.8.tar.gz && cd yara-4.5.8
+./bootstrap.sh
+./configure --enable-magic
+make -j"$(nproc)"
+sudo make install
+sudo ldconfig            # registra la librería compartida
+yara --version
+```
+
+**Windows**
+
+1. Ve a las *releases* oficiales: <https://github.com/VirusTotal/yara/releases>
+2. Descarga el ZIP precompilado para Windows, por ejemplo
+   `yara-4.5.8-2298-win64.zip`.
+3. Descomprímelo en una carpeta, por ejemplo `C:\yara`. Contiene `yara.exe` y
+   `yarac.exe`.
+4. Añade esa carpeta al `PATH` (Configuración → Variables de entorno) para poder
+   ejecutar `yara` desde cualquier terminal.
+5. Comprueba la instalación abriendo PowerShell:
+
+```powershell
+yara.exe --version
+```
+
+**yara-python (opcional, para usar YARA desde Python en ambos sistemas)**
+
+```sh
+pip install yara-python
+```
+
+### Sigma (sigma-cli)
+
+Sigma se instala igual en Linux y en Windows mediante `pip`. Se recomienda usar
+un **entorno virtual** para no tocar el Python del sistema.
+
+**Linux**
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install sigma-cli
+```
+
+**Windows (PowerShell)**
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install sigma-cli
+```
+
+**Instalar los backends usados en la práctica** (una vez activado el entorno, en
+cualquiera de los dos sistemas):
+
+```sh
+sigma plugin install sqlite
+sigma plugin install splunk
+sigma plugin install elasticsearch
+
+# Comprobar
+sigma plugin list      # lista los plugins disponibles e instalados
+sigma list targets     # lista los backends listos para convertir reglas
+```
+
+> Los scripts de este repositorio invocan `.venv/bin/sigma` (en Windows sería
+> `.venv\Scripts\sigma`). Si instalas Sigma en el sistema en lugar de en un
+> entorno virtual, usa simplemente `sigma`.
+
+### Utilidades adicionales para las demos
+
+- **gcc** (compilar la muestra): en Linux viene con `build-essential`
+  (`sudo apt install build-essential`); en Windows puedes usar
+  [MSYS2](https://www.msys2.org/) o WSL.
+- **sqlite3** (demo de Sigma): en Linux `sudo apt install sqlite3`; en Windows
+  descarga los *precompiled binaries* desde <https://www.sqlite.org/download.html>.
+
+## Requisitos (resumen)
 
 - `yara` 4.x en el `PATH`.
-- Python con Sigma instalado (por ejemplo en un entorno virtual `.venv/`):
-  `sigma-cli`, `pysigma-backend-sqlite`, `pysigma-backend-splunk`,
-  `pysigma-backend-elasticsearch`. Los scripts usan `.venv/bin/sigma`.
+- Python 3.8+ con `sigma-cli` y los backends `sqlite`, `splunk` y
+  `elasticsearch` (idealmente en un entorno virtual `.venv/`).
 - `gcc` para compilar la muestra y `sqlite3` para la demo de Sigma.
 
 ## YARA y Sigma, en una tabla
