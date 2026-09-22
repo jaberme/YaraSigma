@@ -1,0 +1,31 @@
+title: Ejecucion sospechosa con conexion a C2 de demostracion
+id: 6f1d2c3a-0e4b-4a11-9c77-2b1a2f0e9a01
+status: experimental
+description: >
+  Detecta la ejecucion de la muestra de demostracion y cualquier proceso que
+  contacte con el dominio del C2 de laboratorio. Regla pensada para clase.
+author: Clase de Seguridad UAL
+date: 2026-09-22
+references:
+  - https://sigmahq.io/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  # Coincidencia por nombre de la imagen del proceso
+  selection_imagen:
+    Image|endswith: '/muestra_demo'
+  # Coincidencia por linea de comandos que referencia el C2
+  selection_c2:
+    CommandLine|contains: 'c2.malicioso-demo.local'
+  condition: selection_imagen or selection_c2
+fields:
+  - Image
+  - CommandLine
+  - User
+falsepositives:
+  - Pruebas de laboratorio controladas
+level: high
+tags:
+  - attack.command-and-control
+  - attack.t1071.001

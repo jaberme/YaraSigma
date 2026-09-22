@@ -1,0 +1,28 @@
+title: Conexion de red saliente hacia C2 de demostracion
+id: 9a2e7b40-5c31-4d88-b0a2-77e6c1d4aa02
+status: experimental
+description: >
+  Detecta conexiones de red salientes cuyo destino es el host del C2 de
+  laboratorio o el patron de URL /beacon. Complementa a la regla YARA de RAM.
+author: Clase de Seguridad UAL
+date: 2026-09-22
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection_host:
+    DestinationHostname|contains: 'c2.malicioso-demo.local'
+  selection_uri:
+    Uri|endswith: '/beacon'
+  condition: selection_host or selection_uri
+fields:
+  - Image
+  - DestinationHostname
+  - DestinationIp
+  - Uri
+falsepositives:
+  - Pruebas de laboratorio controladas
+level: high
+tags:
+  - attack.command-and-control
+  - attack.t1071.001

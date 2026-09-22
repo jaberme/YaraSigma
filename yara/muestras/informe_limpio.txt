@@ -1,0 +1,4 @@
+Informe trimestral de ventas
+============================
+Este documento no contiene nada sospechoso. Sirve como control negativo
+para comprobar que las reglas YARA no generan falsos positivos.

@@ -1,0 +1,521 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------------------------
+% Paquetes
+% ------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{tcolorbox}
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=azulUAL,
+  urlcolor=azulUAL,
+  citecolor=azulUAL
+}
+
+% ------------------------------------------------------------------
+% Colores
+% ------------------------------------------------------------------
+\definecolor{azulUAL}{RGB}{0,80,140}
+\definecolor{grisfondo}{RGB}{245,245,245}
+\definecolor{verdecmd}{RGB}{20,110,40}
+\definecolor{comentario}{RGB}{110,110,110}
+\definecolor{palabraclave}{RGB}{160,20,90}
+\definecolor{cadena}{RGB}{170,80,0}
+
+% ------------------------------------------------------------------
+% Estilos de listings
+% ------------------------------------------------------------------
+\lstdefinestyle{base}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{grisfondo},
+  frame=single,
+  framerule=0pt,
+  rulecolor=\color{grisfondo},
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  aboveskip=8pt,
+  belowskip=8pt,
+}
+
+% Lenguaje YARA (definido a mano: no viene con listings)
+\lstdefinelanguage{yara}{
+  morekeywords={rule,meta,strings,condition,import,and,or,not,any,all,of,them,
+                true,false,ascii,wide,nocase,fullword,filesize,at,in,for},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+}
+
+\lstdefinestyle{yara}{style=base,language=yara,
+  keywordstyle=\color{palabraclave}\bfseries,
+  commentstyle=\color{comentario}\itshape,
+  stringstyle=\color{cadena}}
+
+\lstdefinestyle{yaml}{style=base,language=,
+  keywordstyle=\color{palabraclave}\bfseries,
+  commentstyle=\color{comentario}\itshape,
+  stringstyle=\color{cadena},
+  morekeywords={title,id,status,description,author,date,references,logsource,
+                category,product,detection,condition,fields,falsepositives,
+                level,tags,selection}}
+
+\lstdefinestyle{consola}{style=base,
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{black!92},
+  commentstyle=\color{white},
+  basicstyle=\ttfamily\footnotesize\color{white!95},
+}
+
+\lstdefinestyle{c}{style=base,language=C,
+  keywordstyle=\color{palabraclave}\bfseries,
+  commentstyle=\color{comentario}\itshape,
+  stringstyle=\color{cadena}}
+
+% Caja para comandos de terminal
+\newtcolorbox{terminal}[1][]{
+  colback=black!90,colframe=black!90,
+  coltext=white,fontupper=\ttfamily\footnotesize,
+  boxrule=0pt,arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,#1}
+
+% Caja de idea clave
+\newtcolorbox{ideaclave}{
+  colback=azulUAL!6,colframe=azulUAL,
+  fonttitle=\bfseries,title=Idea clave,
+  boxrule=0.8pt,arc=3pt,left=6pt,right=6pt,top=4pt,bottom=4pt}
+
+% ------------------------------------------------------------------
+% Encabezado y pie
+% ------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small YARA y Sigma en la práctica}
+\rhead{\small Seguridad en Sistemas}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ------------------------------------------------------------------
+% Portada
+% ------------------------------------------------------------------
+\title{\vspace{-1cm}\textbf{\color{azulUAL} Detección de amenazas con YARA y Sigma}\\[4pt]
+\large Un ejemplo práctico para clase: fichero, memoria y logs}
+\author{Universidad de Almería \\ \small Material docente}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+\noindent
+Esta práctica muestra, con ejemplos ejecutables y salidas reales, cómo funcionan
+dos de las herramientas de detección más usadas en seguridad defensiva:
+\textbf{YARA}, que busca patrones dentro de \emph{ficheros} y de la \emph{memoria}
+de procesos en ejecución, y \textbf{Sigma}, un formato genérico de reglas para
+\emph{logs} que se traduce al lenguaje de consulta de cada plataforma (Splunk,
+Elasticsearch, SQLite, etc.). El hilo conductor es una muestra de laboratorio
+inofensiva que cifra sus indicadores en disco y los descifra en memoria, lo que
+permite ver con claridad por qué el análisis de RAM es imprescindible.
+\end{abstract}
+
+\tableofcontents
+\vspace{0.5cm}
+
+% ==================================================================
+\section{Objetivos y montaje}
+% ==================================================================
+
+Al terminar la práctica el alumnado sabrá:
+\begin{itemize}[leftmargin=1.4em]
+  \item Escribir reglas YARA y aplicarlas a un \textbf{fichero} en disco.
+  \item Aplicar la \textbf{misma} regla a la \textbf{RAM} de un proceso vivo y
+        entender por qué el resultado es distinto.
+  \item Escribir una regla \textbf{Sigma} y traducirla a varios lenguajes de
+        consulta, ejecutándola contra un log real.
+\end{itemize}
+
+\begin{ideaclave}
+El malware moderno oculta sus indicadores en disco (cifrado, empaquetado,
+ofuscación). Solo cuando se ejecuta se descifra en memoria. Por eso una regla que
+\emph{falla} contra el fichero puede \emph{acertar} contra la RAM del proceso.
+Este es el núcleo pedagógico del ejemplo.
+\end{ideaclave}
+
+\subsection*{Herramientas usadas}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Herramienta} & \textbf{Versión} & \textbf{Para qué} \\
+\midrule
+YARA        & 4.5.8   & Reglas sobre ficheros y memoria \\
+yara-python & 4.5.4   & Uso de YARA desde Python (opcional) \\
+sigma-cli   & 3.1.0   & Conversión de reglas Sigma \\
+SQLite      & 3.45    & Log de ejemplo consultable \\
+gcc         & (sistema) & Compilar la muestra de laboratorio \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Estructura de ficheros del proyecto}
+
+\begin{lstlisting}[style=base]
+yara/
+  muestras/
+    muestra_demo.c        # "malware" de laboratorio (inofensivo)
+    compilar.sh           # compila la muestra
+    eicar.com             # fichero de prueba estandar EICAR
+    informe_limpio.txt    # control negativo (fichero limpio)
+  reglas/
+    demo_fichero.yar      # reglas para escanear ficheros
+    demo_ram.yar          # reglas para escanear memoria
+  ejecutar_yara.sh        # script que ejecuta toda la demo de YARA
+sigma/
+  reglas/
+    proceso_sospechoso.yml
+    beacon_red.yml
+  logs/
+    eventos.sql           # log sintetico de creacion de procesos
+  ejecutar_sigma.sh       # script que ejecuta toda la demo de Sigma
+\end{lstlisting}
+
+% ==================================================================
+\section{La muestra de laboratorio}
+% ==================================================================
+
+La muestra es un programa en C \textbf{inofensivo}. No se conecta a ningún sitio
+ni hace nada dañino: se limita a descifrar en memoria dos indicadores y a esperar
+en un bucle. Los indicadores son un dominio de mando y control (C2) ficticio y un
+marcador de \emph{payload}. En disco están cifrados con una operación XOR sencilla,
+de modo que \textbf{no aparecen en texto plano} en el binario.
+
+\begin{lstlisting}[style=c,caption={Fragmento de \texttt{muestra\_demo.c}},captionpos=b]
+#define CLAVE_XOR 0x5A
+
+/* "http://c2.malicioso-demo.local/beacon" cifrado con XOR 0x5A */
+static unsigned char c2_cifrado[] = { 0x32,0x2e,0x2e,0x2a, /* ... */ };
+
+static char *descifrar(const unsigned char *src, size_t n) {
+    char *out = malloc(n + 1);
+    for (size_t i = 0; i < n; i++)
+        out[i] = (char)(src[i] ^ CLAVE_XOR);  /* descifrado en RAM */
+    out[n] = '\0';
+    return out;
+}
+\end{lstlisting}
+
+\begin{tcolorbox}[colback=orange!8,colframe=orange!70!black,title=Nota de seguridad,
+  fonttitle=\bfseries,boxrule=0.6pt,arc=2pt]
+La muestra llama a \texttt{prctl(PR\_SET\_PTRACER, PR\_SET\_PTRACER\_ANY, \dots)}
+únicamente para que, en la demo, \texttt{yara} pueda leer su memoria sin
+privilegios de administrador. En un análisis real se usaría \texttt{sudo} o un
+entorno aislado. La muestra no realiza ninguna acción peligrosa.
+\end{tcolorbox}
+
+Se compila así, quitando los símbolos para que se parezca a una muestra real:
+
+\begin{terminal}
+\$ bash yara/muestras/compilar.sh\\
+Compilado: .../yara/muestras/muestra\_demo
+\end{terminal}
+
+Comprobamos que las cadenas comprometedoras \textbf{no} están en claro en el binario:
+
+\begin{terminal}
+\$ strings yara/muestras/muestra\_demo | grep -Ei "c2|EVIL|malicioso"\\
+(sin resultados)
+\end{terminal}
+
+% ==================================================================
+\section{YARA sobre ficheros}
+% ==================================================================
+
+Una regla YARA tiene tres secciones: \texttt{meta} (información descriptiva),
+\texttt{strings} (los patrones a buscar) y \texttt{condition} (la expresión
+booleana que decide si la regla ``salta''). Los patrones pueden ser texto,
+secuencias hexadecimales o expresiones regulares.
+
+\begin{lstlisting}[style=yara,caption={\texttt{yara/reglas/demo\_fichero.yar} (extracto)},captionpos=b]
+import "elf"    // inspeccionar cabeceras ELF (Linux)
+
+rule EICAR_Fichero_Prueba : prueba {
+    strings:
+        $eicar = "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
+    condition:
+        $eicar
+}
+
+rule Malware_Demo_Disco : demo linux {
+    strings:
+        $s1 = "[muestra_demo]"
+        $s2 = "Cadenas descifradas en memoria"
+    condition:
+        (elf.type == elf.ET_EXEC or elf.type == elf.ET_DYN)
+        and any of ($s*)
+}
+
+rule C2_En_Claro : demo c2 {
+    strings:
+        $dominio = "c2.malicioso-demo.local" ascii wide nocase
+        $payload = "EVIL_PAYLOAD_DEMO_v1"     ascii wide
+    condition:
+        any of them
+}
+\end{lstlisting}
+
+\subsection*{Ejecución}
+
+La sintaxis es \texttt{yara REGLAS OBJETIVO}. Escaneamos cada muestra:
+
+\begin{terminal}
+\$ yara yara/reglas/demo\_fichero.yar yara/muestras/muestra\_demo\\
+Malware\_Demo\_Disco yara/muestras/muestra\_demo\\[4pt]
+\$ yara yara/reglas/demo\_fichero.yar yara/muestras/eicar.com\\
+EICAR\_Fichero\_Prueba yara/muestras/eicar.com\\[4pt]
+\$ yara yara/reglas/demo\_fichero.yar yara/muestras/informe\_limpio.txt\\
+(sin coincidencias: es el control negativo)
+\end{terminal}
+
+\begin{ideaclave}
+Fíjate en lo que \textbf{no} ha pasado: la regla \texttt{C2\_En\_Claro} no ha
+saltado contra el binario. El dominio del C2 existe en el programa, pero está
+cifrado en disco, así que YARA no lo encuentra. Lo veremos aparecer en la sección
+siguiente, al escanear la memoria.
+\end{ideaclave}
+
+Un detalle didáctico: si escaneamos la carpeta en modo recursivo
+(\texttt{yara -r}), la regla \texttt{C2\_En\_Claro} \emph{sí} salta contra el
+\textbf{código fuente} \texttt{muestra\_demo.c}, porque ahí el dominio aparece en
+un comentario en texto plano. El mismo indicador está oculto en el binario y
+visible en el fuente.
+
+\begin{terminal}
+\$ yara -r yara/reglas/demo\_fichero.yar yara/muestras/\\
+Malware\_Demo\_Disco yara/muestras//muestra\_demo\\
+C2\_En\_Claro       yara/muestras//muestra\_demo.c\\
+EICAR\_Fichero\_Prueba yara/muestras//eicar.com
+\end{terminal}
+
+% ==================================================================
+\section{YARA sobre la memoria (RAM)}
+% ==================================================================
+
+YARA puede escanear la memoria de un proceso en ejecución pasándole su
+\textbf{PID} en lugar de un fichero. Recorre las regiones de memoria del proceso
+buscando los mismos patrones. Usamos las reglas de \texttt{demo\_ram.yar}, que
+buscan los indicadores \textbf{en claro}.
+
+\begin{lstlisting}[style=yara,caption={\texttt{yara/reglas/demo\_ram.yar}},captionpos=b]
+rule Malware_Demo_En_Memoria : demo ram {
+    strings:
+        $dominio = "c2.malicioso-demo.local" ascii wide nocase
+        $payload = "EVIL_PAYLOAD_DEMO_v1"     ascii wide
+        $url     = "http://c2.malicioso-demo.local/beacon" ascii
+    condition:
+        any of them
+}
+
+rule Beacon_C2_Generico : ram heuristica {
+    strings:
+        // URL de beacon http hacia un host 'c2.*'
+        $beacon = /https?:\/\/c2\.[a-z0-9.\-]+\/beacon/ ascii nocase
+    condition:
+        $beacon
+}
+\end{lstlisting}
+
+\subsection*{Ejecución}
+
+Lanzamos la muestra en segundo plano, anotamos su PID, y comparamos el escaneo
+del fichero con el escaneo de la memoria:
+
+\begin{terminal}
+\$ ./yara/muestras/muestra\_demo \&\\
+{[}muestra\_demo{]} PID 93636\\
+{[}muestra\_demo{]} Cadenas descifradas en memoria. Esperando...\\[6pt]
+\# 1) La regla de C2 contra el FICHERO en disco: FALLA\\
+\$ yara yara/reglas/demo\_ram.yar yara/muestras/muestra\_demo\\
+(sin salida)\\[6pt]
+\# 2) La MISMA regla contra la RAM del proceso: ACIERTA\\
+\$ yara -s yara/reglas/demo\_ram.yar 93636\\
+Malware\_Demo\_En\_Memoria 93636\\
+0x60278e3202a7:\$dominio: c2.malicioso-demo.local\\
+0x60278e3202d0:\$payload: EVIL\_PAYLOAD\_DEMO\_v1\\
+0x60278e3202a0:\$url: http://c2.malicioso-demo.local/beacon\\
+Beacon\_C2\_Generico 93636\\
+0x60278e3202a0:\$beacon: http://c2.malicioso-demo.local/beacon
+\end{terminal}
+
+La opción \texttt{-s} muestra, para cada coincidencia, la \textbf{dirección de
+memoria} y el \textbf{contenido} encontrado. Vemos los tres indicadores ya
+descifrados, exactamente donde el malware los dejó en la RAM.
+
+\begin{ideaclave}
+Mismo binario, misma regla, resultado opuesto. En disco los indicadores están
+cifrados y la regla falla; en memoria están descifrados y la regla los encuentra.
+Esta es la razón por la que el \emph{análisis de memoria} (RAM forensics) es una
+técnica central en la respuesta ante incidentes.
+\end{ideaclave}
+
+\subsection*{Del PID al volcado de memoria completo}
+
+En un caso real no siempre hay un proceso vivo que escanear. Lo habitual es
+capturar un \textbf{volcado de memoria} de toda la máquina y analizarlo en frío,
+por ejemplo con \textbf{Volatility}. YARA se integra en ese flujo: se puede
+escanear el volcado o los procesos extraídos de él con las mismas reglas. El
+principio es idéntico al de esta práctica; solo cambia el origen de los bytes.
+
+% ==================================================================
+\section{Sigma: una regla, muchos backends}
+% ==================================================================
+
+YARA mira \emph{bytes} (ficheros y memoria). Sigma mira \emph{logs}. Una regla
+Sigma se escribe una sola vez en YAML, de forma independiente de la plataforma, y
+luego se \textbf{traduce} al lenguaje de consulta concreto: SPL para Splunk,
+Lucene o EQL para Elasticsearch, SQL para SQLite, etc. Así una misma lógica de
+detección se comparte entre organizaciones que usan herramientas distintas.
+
+\begin{lstlisting}[style=yaml,caption={\texttt{sigma/reglas/proceso\_sospechoso.yml}},captionpos=b]
+title: Ejecucion sospechosa con conexion a C2 de demostracion
+status: experimental
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_imagen:
+    Image|endswith: '/muestra_demo'
+  selection_c2:
+    CommandLine|contains: 'c2.malicioso-demo.local'
+  condition: selection_imagen or selection_c2
+fields: [Image, CommandLine, User]
+level: high
+tags: [attack.command-and-control, attack.t1071.001]
+\end{lstlisting}
+
+\subsection*{Traducción a varios lenguajes}
+
+Con \texttt{sigma convert -t BACKEND} obtenemos la consulta en cada plataforma.
+La \textbf{misma} regla produce:
+
+\begin{terminal}
+\$ sigma convert -t splunk --without-pipeline proceso\_sospechoso.yml\\
+Image="*/muestra\_demo" OR CommandLine="*c2.malicioso-demo.local*"\\
+\hspace*{2em}| table Image,CommandLine,User\\[6pt]
+\$ sigma convert -t lucene --without-pipeline proceso\_sospechoso.yml\\
+Image:*\textbackslash/muestra\_demo OR CommandLine:*c2.malicioso\textbackslash-demo.local*\\[6pt]
+\$ sigma convert -t sqlite proceso\_sospechoso.yml\\
+SELECT * FROM <TABLE\_NAME> WHERE Image LIKE '\%/muestra\textbackslash\_demo' ESCAPE '\textbackslash'\\
+\hspace*{2em}OR CommandLine LIKE '\%c2.malicioso-demo.local\%' ESCAPE '\textbackslash'
+\end{terminal}
+
+\subsection*{Ejecución real contra un log}
+
+Para que no sea solo teoría, cargamos un log sintético de creación de procesos en
+una base SQLite y ejecutamos la consulta que Sigma ha generado. El log mezcla
+actividad normal con dos eventos maliciosos.
+
+\begin{terminal}
+\$ sqlite3 eventos.db < eventos.sql\\
+\$ CONSULTA=\$(sigma convert -t sqlite proceso\_sospechoso.yml \textbar\ sed 's/<TABLE\_NAME>/eventos/')\\
+\$ sqlite3 -header -column eventos.db "\$CONSULTA"
+\end{terminal}
+
+El resultado detecta exactamente los dos eventos maliciosos y \textbf{descarta el
+ruido} (bash, curl a la web de la universidad, python):
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{UtcTime} & \textbf{Image} & \textbf{CommandLine} \\
+\midrule
+2026-09-22 08:02:11 & .../muestra\_demo & ./muestra\_demo \\
+2026-09-22 08:02:30 & /usr/bin/curl & curl http://c2.malicioso-demo.local/beacon \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+El primer evento coincide por el \emph{nombre de la imagen}
+(\texttt{selection\_imagen}); el segundo, por la \emph{línea de comandos}
+(\texttt{selection\_c2}). Los tres eventos benignos no aparecen.
+
+% ==================================================================
+\section{YARA y Sigma juntos}
+% ==================================================================
+
+Las dos herramientas son complementarias, no rivales. Cubren capas distintas de
+la detección:
+
+\begin{center}
+\begin{tabular}{@{}p{3.2cm}p{5.2cm}p{5.2cm}@{}}
+\toprule
+ & \textbf{YARA} & \textbf{Sigma} \\
+\midrule
+Qué inspecciona & Ficheros y memoria (bytes) & Logs y eventos \\
+Dónde actúa & Endpoint, análisis forense, sandbox & SIEM, EDR, plataforma de logs \\
+Formato & Reglas \texttt{.yar} propias & YAML genérico traducible \\
+Pregunta que responde & ¿Este artefacto contiene el patrón? & ¿Ha ocurrido este evento? \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{ideaclave}
+Un flujo de detección realista los encadena: Sigma alerta en el SIEM de que un
+proceso sospechoso se ha ejecutado (evento de log); a raíz de esa alerta, el
+analista lanza YARA contra la memoria de ese proceso para confirmar la infección
+(bytes). Log $\rightarrow$ alerta $\rightarrow$ confirmación en memoria.
+\end{ideaclave}
+
+% ==================================================================
+\section{Reproducir la práctica}
+% ==================================================================
+
+Todo el ejemplo se ejecuta con dos scripts, desde la raíz del proyecto:
+
+\begin{terminal}
+\# Demo completa de YARA (fichero + memoria)\\
+\$ bash yara/ejecutar\_yara.sh\\[6pt]
+\# Demo completa de Sigma (conversion + consulta real)\\
+\$ bash sigma/ejecutar\_sigma.sh
+\end{terminal}
+
+\subsection*{Ejercicios propuestos}
+
+\begin{enumerate}[leftmargin=1.6em]
+  \item Cambia la clave XOR de la muestra y comprueba que las reglas de RAM siguen
+        funcionando sin tocarlas, mientras que buscar el texto cifrado en disco no
+        sirve de nada.
+  \item Añade a \texttt{demo\_ram.yar} una regla que exija que aparezcan
+        \emph{a la vez} el dominio y el payload (\texttt{\$dominio and \$payload}).
+  \item Escribe una regla Sigma para la categoría \texttt{network\_connection}
+        (ya tienes \texttt{beacon\_red.yml} como modelo) y tradúcela a Splunk.
+  \item Convierte la regla Sigma a otro backend disponible
+        (\texttt{sigma list targets}) y compara la sintaxis.
+\end{enumerate}
+
+\vfill
+\begin{center}
+\small\color{comentario}
+Material docente. Las muestras son de laboratorio y completamente inofensivas.
+El dominio \texttt{c2.malicioso-demo.local} es ficticio y no resuelve.
+\end{center}
+
+\end{document}
