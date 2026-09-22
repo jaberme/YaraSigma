@@ -1,6 +1,6 @@
 ![YARA y Sigma](imageReadme.png)
 
-# YaraSigma — Detección de amenazas con YARA y Sigma
+# YaraSigma. Detección de amenazas con YARA y Sigma
 
 Material didáctico y ejecutable para aprender, con un mismo hilo conductor, cómo
 funcionan dos de las herramientas más usadas en seguridad defensiva:
