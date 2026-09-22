@@ -9,3 +9,6 @@
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+
+# Base SQLite generada por la demo de Sigma (se recrea con eventos.sql)
+sigma/logs/*.db
