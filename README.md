@@ -2,6 +2,9 @@
 
 # YaraSigma. Detección de amenazas con YARA y Sigma
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23249807.svg)](https://doi.org/10.5281/zenodo.23249807)
+
+
 Material didáctico y ejecutable para aprender, con un mismo hilo conductor, cómo
 funcionan dos de las herramientas más usadas en seguridad defensiva:
 
